@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#FAF3E6">
-<title>บันทึกรายรับรายจ่าย</title>
+<title>กระปุกคู่ — บันทึกรายรับรายจ่าย</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Trirong:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -221,6 +221,19 @@
   .settle-amt{ font-family:'Trirong', serif; font-weight:600; font-size:26px; color:var(--paper); margin-bottom:6px; }
   .settle-desc{ font-size:13px; color:var(--muted); }
   .settle-even{ color:var(--sage); font-weight:600; }
+
+  /* ---- Loading overlay ---- */
+  #loadingOverlay{
+    position:fixed; inset:0; background:var(--bg); z-index:150;
+    display:none; flex-direction:column; align-items:center; justify-content:center; gap:18px;
+  }
+  #loadingOverlay.show{ display:flex; }
+  .loading-jar{ font-size:48px; animation:jarBounce 1s ease-in-out infinite; }
+  @keyframes jarBounce{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-12px); } }
+  .loading-msg{ font-size:14px; color:var(--muted); font-weight:500; }
+  .loading-bar-wrap{ width:180px; height:4px; background:var(--overlay-3); border-radius:4px; overflow:hidden; }
+  .loading-bar{ height:100%; background:linear-gradient(90deg, var(--accent), var(--gold)); border-radius:4px; animation:loadSlide 1.4s ease-in-out infinite; }
+  @keyframes loadSlide{ 0%{ width:0%; margin-left:0; } 50%{ width:80%; } 100%{ width:0%; margin-left:100%; } }
 
   /* ---- Settings: color picker ---- */
   .color-row{ display:flex; align-items:center; }
@@ -658,6 +671,12 @@
 
 <div id="toastWrap"></div>
 
+<div id="loadingOverlay">
+  <div class="loading-jar">🐷</div>
+  <div class="loading-msg" id="loadingMsg">กำลังโหลดข้อมูล...</div>
+  <div class="loading-bar-wrap"><div class="loading-bar"></div></div>
+</div>
+
 <div id="receiptLightbox" class="receipt-lightbox" onclick="closeReceiptLightbox()">
   <img id="receiptLightboxImg" src="">
 </div>
@@ -666,7 +685,7 @@
   <div class="login-card">
     <div class="mark">🐷</div>
     <h2 id="loginTitle">เข้าสู่ระบบ</h2>
-    <div class="sub" id="loginSub">ใช้เบอร์โทรของคุณเข้าสู่ระบบ</div>
+    <div class="sub" id="loginSub">กระปุกคู่ — ใช้เบอร์โทรของคุณเข้าสู่ระบบ</div>
 
     <div class="login-err" id="loginErr"></div>
 
@@ -717,6 +736,10 @@
       </div>
       <button class="submit-btn" id="registerBtn">สร้างบัญชี</button>
       <div class="login-switch">มีบัญชีแล้ว? <a id="showLogin">เข้าสู่ระบบ</a></div>
+    </div>
+
+    <div class="sync-note">ข้อมูลและบัญชีจะซิงค์กันระหว่างอุปกรณ์ของคุณกับแฟนโดยอัตโนมัติ</div>
+  </div>
 </div>
 
 <div class="app">
@@ -737,8 +760,8 @@
     <div class="brand">
       <div class="mark">🐷</div>
       <div>
-        <div class="name">INT & VIP</div>
-        <div class="tag">บัญชีการเงิน</div>
+        <div class="name">กระปุกคู่</div>
+        <div class="tag">การเงินของเราสองคน</div>
       </div>
     </div>
 
@@ -779,7 +802,7 @@
     <div class="page active" id="page-dashboard">
       <div class="topbar">
         <div>
-          <h1>Dashboard</h1>
+          <h1>แดชบอร์ด</h1>
           <div class="desc">ภาพรวมการเงินของเราสองคน อัปเดตทุกครั้งที่บันทึกรายการ</div>
         </div>
         <div class="range-toggle" id="dashRange">
@@ -1540,9 +1563,11 @@ $('registerBtn').addEventListener('click', async () => {
   $('registerBtn').textContent = '⏳ กำลังสร้างบัญชี...';
   users[phone] = { pin, who: regWho };
   await saveUsers(users);
+  showLoading('กำลังเตรียมแอปให้คุณ...');
+  await loginAs(phone, regWho);
+  hideLoading();
   $('registerBtn').disabled = false;
   $('registerBtn').textContent = 'สร้างบัญชี';
-  await loginAs(phone, regWho);
 });
 
 $('loginBtn').addEventListener('click', async () => {
@@ -1563,8 +1588,9 @@ $('loginBtn').addEventListener('click', async () => {
     clearCache();
     return;
   }
-  $('loginBtn').textContent = '⏳ กำลังโหลดข้อมูล...';
+  showLoading('กำลังโหลดข้อมูลของคุณ...');
   await loginAs(phone, rec.who);
+  hideLoading();
   $('loginBtn').disabled = false;
   $('loginBtn').textContent = 'เข้าสู่ระบบ';
 });
@@ -1589,11 +1615,14 @@ async function loginAs(phone, who, skipSessionSave){
   });
   $('loginScreen').style.display = 'none';
   document.querySelector('.app').classList.add('ready');
+  showLoading('กำลังดึงข้อมูลจาก Google Sheet...');
   entries = await loadEntriesFromCloud();
   lastEntriesSnapshot = JSON.stringify(entries);
+  showLoading('กำลังโหลดงบประมาณและเป้าหมาย...');
   budgets = await loadBudgetsFromCloud();
   goals = await loadGoalsFromCloud();
   rolloverEnabled = await loadRolloverFromCloud();
+  showLoading('กำลังเตรียมหมวดหมู่และการตั้งค่า...');
   CATEGORIES = await loadCategoriesFromCloud();
   whoColors = await loadWhoColorsFromCloud();
   applyWhoColors();
@@ -1601,6 +1630,7 @@ async function loginAs(phone, who, skipSessionSave){
   settleSince = await loadSettleSinceFromCloud();
   await loadAndApplyDarkMode();
   await loadAndRenderNotes();
+  showLoading('กำลังแสดงผล...');
   refreshCategoryDependents();
   renderCatMgr();
   fillRecCategories();
@@ -1639,6 +1669,14 @@ function showToast(msg){
   el.textContent = msg;
   wrap.appendChild(el);
   setTimeout(() => el.remove(), 3000);
+}
+
+function showLoading(msg){
+  $('loadingMsg').textContent = msg || 'กำลังโหลดข้อมูล...';
+  $('loadingOverlay').classList.add('show');
+}
+function hideLoading(){
+  $('loadingOverlay').classList.remove('show');
 }
 
 /* ===================== POLLING (auto-refresh ข้ามอุปกรณ์) ===================== */
@@ -2370,12 +2408,18 @@ async function tryRestoreSession(){
     const res = await window.storage.get(SESSION_KEY, false);
     if(!res) return;
     const session = JSON.parse(res.value);
+    showLoading('กำลังเข้าสู่ระบบอัตโนมัติ...');
+    await warmCache();
     const users = await getUsers();
     const rec = users[session.phone];
     if(rec && rec.who === session.who){
       await loginAs(session.phone, session.who, true);
     }
-  } catch(e){ /* ไม่มี session เก่า ไม่เป็นไร */ }
+    hideLoading();
+  } catch(e){
+    hideLoading();
+    /* ไม่มี session เก่า ไม่เป็นไร */
+  }
 }
 
 // Settings page: Google Sheet URL (hardcoded, display only)
@@ -2910,7 +2954,7 @@ $('exportPdfBtn').addEventListener('click', () => {
   `).join('');
   const printWindow = window.open('', '_blank');
   printWindow.document.write(`
-    <html lang="th"><head><meta charset="UTF-8"><title>รายงาน รายรับรายจ่าย</title>
+    <html lang="th"><head><meta charset="UTF-8"><title>รายงานกระปุกคู่</title>
     <style>
       body{ font-family:'Sarabun','Inter',sans-serif; padding:30px; color:#2B2118; }
       h1{ font-size:22px; margin-bottom:2px; }
@@ -2925,7 +2969,7 @@ $('exportPdfBtn').addEventListener('click', () => {
       @media print{ body{ padding:10px; } }
     </style></head>
     <body>
-      <h1>รายงานบันทึกรายรับรายจ่าย</h1>
+      <h1>รายงานกระปุกคู่ — บันทึกรายรับรายจ่าย</h1>
       <div class="sub">พิมพ์เมื่อ ${new Date().toLocaleDateString('th-TH', {day:'numeric', month:'long', year:'numeric'})} · Sittiporn (INT) &amp; Wanaree (VIPCREAM)</div>
       <div class="summary">
         <div><div class="lbl">รายรับรวม</div><div class="val" style="color:#1FA971">+${formatMoney(income)}</div></div>
@@ -2965,4 +3009,3 @@ tryRestoreSession();
 
 </body>
 </html>
-
