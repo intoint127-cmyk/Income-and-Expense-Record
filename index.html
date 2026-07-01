@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#FAF3E6">
-<title>กระปุกคู่ — บันทึกรายรับรายจ่าย</title>
+<title>บันทึกรายรับรายจ่าย</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Trirong:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -666,7 +666,7 @@
   <div class="login-card">
     <div class="mark">🐷</div>
     <h2 id="loginTitle">เข้าสู่ระบบ</h2>
-    <div class="sub" id="loginSub">กระปุกคู่ — ใช้เบอร์โทรของคุณเข้าสู่ระบบ</div>
+    <div class="sub" id="loginSub">ใช้เบอร์โทรของคุณเข้าสู่ระบบ</div>
 
     <div class="login-err" id="loginErr"></div>
 
@@ -783,7 +783,7 @@
     <div class="page active" id="page-dashboard">
       <div class="topbar">
         <div>
-          <h1>แดชบอร์ด</h1>
+          <h1>Dashboard</h1>
           <div class="desc">ภาพรวมการเงินของเราสองคน อัปเดตทุกครั้งที่บันทึกรายการ</div>
         </div>
         <div class="range-toggle" id="dashRange">
@@ -2914,7 +2914,7 @@ $('exportPdfBtn').addEventListener('click', () => {
   `).join('');
   const printWindow = window.open('', '_blank');
   printWindow.document.write(`
-    <html lang="th"><head><meta charset="UTF-8"><title>รายงานกระปุกคู่</title>
+    <html lang="th"><head><meta charset="UTF-8"><title>รายงาน รายรับรายจ่าย</title>
     <style>
       body{ font-family:'Sarabun','Inter',sans-serif; padding:30px; color:#2B2118; }
       h1{ font-size:22px; margin-bottom:2px; }
@@ -2929,7 +2929,7 @@ $('exportPdfBtn').addEventListener('click', () => {
       @media print{ body{ padding:10px; } }
     </style></head>
     <body>
-      <h1>รายงานกระปุกคู่ — บันทึกรายรับรายจ่าย</h1>
+      <h1>รายงานบันทึกรายรับรายจ่าย</h1>
       <div class="sub">พิมพ์เมื่อ ${new Date().toLocaleDateString('th-TH', {day:'numeric', month:'long', year:'numeric'})} · Sittiporn (INT) &amp; Wanaree (VIPCREAM)</div>
       <div class="summary">
         <div><div class="lbl">รายรับรวม</div><div class="val" style="color:#1FA971">+${formatMoney(income)}</div></div>
