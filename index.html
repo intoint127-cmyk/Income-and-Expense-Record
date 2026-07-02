@@ -834,7 +834,7 @@
       <div class="topbar">
         <div>
           <h1>Dashboard</h1>
-          <div class="desc">ภาพรวมการเงิน อัปเดตทุกครั้งที่บันทึกรายการ</div>
+          <div class="desc">ภาพรวมการเงินของเราสองคน อัปเดตทุกครั้งที่บันทึกรายการ</div>
         </div>
         <div class="range-toggle" id="dashRange">
           <button class="active" data-range="all">ทั้งหมด</button>
@@ -849,7 +849,7 @@
         <div class="passbook-top">
           <div class="passbook-jar">🐷</div>
           <div>
-            <div class="passbook-lbl">คงเหลือในบัญชีของเราสองคน</div>
+            <div class="passbook-lbl">คงเหลือในกระปุกของเราสองคน</div>
             <div class="passbook-val display" id="totalBalanceWrap"><span id="totalBalance">0</span><span class="passbook-unit">บาท</span></div>
           </div>
         </div>
@@ -1239,112 +1239,109 @@
 <script>
 /* ===================== GOOGLE SHEETS STORAGE OVERRIDE ===================== */
 const SCRIPT_URL_LS = 'kp_gs_url'; // localStorage key for Apps Script URL
-const APPS_SCRIPT_CODE = `// กระปุกคู่ — Google Apps Script Backend
-// วางโค้ดนี้ใน Apps Script แล้ว Deploy > New deployment > Web app
-// Execute as: Me | Who has access: Anyone
+const APPS_SCRIPT_CODE = `// กระปุกคู่ — Google Apps Script Backend (v3 — row-per-entry)
+// Deploy > New deployment > Web app | Execute as: Me | Who has access: Anyone
 
 function doGet(e) {
   return handle(e.parameter.action, e.parameter.key, e.parameter.value, e.parameter.prefix);
 }
 function doPost(e) {
-  try {
-    const b = JSON.parse(e.postData.contents);
-    return handle(b.action, b.key, b.value, b.prefix);
-  } catch(err) { return out({error: 'parse_error'}); }
+  try { const b = JSON.parse(e.postData.contents); return handle(b.action, b.key, b.value, b.prefix); }
+  catch(err) { return out({error:'parse_error'}); }
 }
 function handle(action, key, value, prefix) {
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
-    const sheet = getSheet();
-    if (action === 'get') {
-      const v = find(sheet, key);
-      return v !== null ? out({key, value: v}) : out({error: 'not_found'});
-    }
-    if (action === 'set')    { write(sheet, key, value); return out({success:true}); }
-    if (action === 'delete') { remove(sheet, key); return out({success:true,deleted:true}); }
-    if (action === 'list')   { return out({keys: listAll(sheet, prefix||'')}); }
-    // ---- Batch: โหลดข้อมูลทั้งหมดในครั้งเดียว ----
-    if (action === 'getAll') {
-      const vals = sheet.getDataRange().getValues().slice(1);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = getDataSheet(ss);
+
+    // ---- Key-Value (Data sheet) ----
+    if (action==='get')    { const v=find(sheet,key); return v!==null?out({key,value:v}):out({error:'not_found'}); }
+    if (action==='set')    { write(sheet,key,value); return out({success:true}); }
+    if (action==='delete') { remove(sheet,key); return out({success:true,deleted:true}); }
+    if (action==='list')   { return out({keys:listAll(sheet,prefix||'')}); }
+
+    // ---- getAll: Data + Entries รวมใน 1 request ----
+    if (action==='getAll') {
+      const dVals = sheet.getDataRange().getValues().slice(1);
       const data = {};
-      vals.forEach(r => { if(r[0]) data[String(r[0])] = String(r[1]); });
-      return out({data});
+      dVals.forEach(r => { if(r[0]) data[String(r[0])]=String(r[1]); });
+      const entries = getEntriesArr(getEntriesSheet(ss));
+      return out({data, entries});
     }
-    // ---- Batch: เซฟหลาย key พร้อมกัน ----
-    if (action === 'setMany') {
-      const pairs = JSON.parse(value); // [{key,value}]
-      pairs.forEach(p => write(sheet, p.key, p.value));
-      return out({success:true, count: pairs.length});
-    }
-    // ---- Edit log ----
-    if (action === 'appendLog') {
-      const logSheet = getLogSheet(ss);
-      const row = JSON.parse(value);
-      logSheet.appendRow([row.ts, row.action, row.by, row.entryId, row.type, row.category, row.note, row.date, row.amtBefore, row.amtAfter]);
+
+    // ---- Per-row Entry operations (ป้องกัน race condition) ----
+    if (action==='appendEntry') {
+      const e = JSON.parse(value);
+      getEntriesSheet(ss).appendRow(entryToRow(e));
       return out({success:true});
     }
-    if (action === 'getLog') {
-      const logSheet = getLogSheet(ss);
-      const vals = logSheet.getDataRange().getValues().slice(1);
-      const rows = vals.map(r => ({ts:String(r[0]),action:String(r[1]),by:String(r[2]),entryId:String(r[3]),type:String(r[4]),category:String(r[5]),note:String(r[6]),date:String(r[7]),amtBefore:r[8],amtAfter:r[9]}));
-      return out({rows});
+    if (action==='updateEntry') {
+      const e = JSON.parse(value);
+      const es = getEntriesSheet(ss);
+      const v = es.getDataRange().getValues();
+      for(let i=1;i<v.length;i++){
+        if(String(v[i][0])===String(e.id)){ es.getRange(i+1,1,1,9).setValues([entryToRow(e)]); return out({success:true}); }
+      }
+      es.appendRow(entryToRow(e)); // ถ้าหาไม่เจอให้ append
+      return out({success:true});
     }
-    return out({error: 'unknown_action'});
+    if (action==='deleteEntry') {
+      const es = getEntriesSheet(ss);
+      const v = es.getDataRange().getValues();
+      for(let i=v.length-1;i>=1;i--){ if(String(v[i][0])===String(value)){ es.deleteRow(i+1); break; } }
+      return out({success:true,deleted:true});
+    }
+    if (action==='getEntries') {
+      return out({entries: getEntriesArr(getEntriesSheet(ss))});
+    }
+    if (action==='replaceAllEntries') {
+      const es = getEntriesSheet(ss);
+      if(es.getLastRow()>1) es.deleteRows(2,es.getLastRow()-1);
+      const arr = JSON.parse(value);
+      if(arr.length>0) es.getRange(2,1,arr.length,9).setValues(arr.map(entryToRow));
+      return out({success:true,count:arr.length});
+    }
+
+    // ---- Edit log ----
+    if (action==='appendLog') {
+      const r=JSON.parse(value);
+      getLogSheet(ss).appendRow([r.ts,r.action,r.by,r.entryId,r.type,r.category,r.note,r.date,r.amtBefore,r.amtAfter]);
+      return out({success:true});
+    }
+    if (action==='getLog') {
+      const v=getLogSheet(ss).getDataRange().getValues().slice(1);
+      return out({rows:v.map(r=>({ts:String(r[0]),action:String(r[1]),by:String(r[2]),entryId:String(r[3]),type:String(r[4]),category:String(r[5]),note:String(r[6]),date:String(r[7]),amtBefore:r[8],amtAfter:r[9]}))});
+    }
+    return out({error:'unknown_action'});
   } finally { lock.releaseLock(); }
 }
-function getLogSheet(ss) {
-  let s = ss.getSheetByName('EditLog');
-  if (!s) {
-    s = ss.insertSheet('EditLog');
-    s.getRange('A1:J1').setValues([['Timestamp','Action','By','EntryId','Type','Category','Note','EntryDate','AmtBefore','AmtAfter']]);
-    s.setFrozenRows(1);
-    s.setColumnWidth(1, 160);
-    s.setColumnWidth(2, 70);
-    s.setColumnWidth(3, 160);
-  }
+function entryToRow(e){ return [String(e.id),e.type||'',Number(e.amount)||0,e.category||'',e.note||'',e.date||'',e.who||'',e.split?'1':'',new Date().toISOString()]; }
+function rowToEntry(r){ return {id:Number(r[0])||r[0],type:String(r[1]),amount:Number(r[2]),category:String(r[3]),note:String(r[4]),date:String(r[5]),who:String(r[6]),split:r[7]==='1'||r[7]===true}; }
+function getEntriesArr(es){ return es.getDataRange().getValues().slice(1).filter(r=>r[0]).map(rowToEntry).sort((a,b)=>Number(b.id)-Number(a.id)); }
+function getDataSheet(ss){
+  let s=ss.getSheetByName('Data');
+  if(!s){ s=ss.insertSheet('Data'); s.getRange('A1:B1').setValues([['Key','Value']]); s.setFrozenRows(1); s.setColumnWidth(1,220); s.setColumnWidth(2,800); }
   return s;
 }
-function getSheet() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let s = ss.getSheetByName('Data');
-  if (!s) {
-    s = ss.insertSheet('Data');
-    s.getRange('A1:B1').setValues([['Key','Value']]);
-    s.setFrozenRows(1);
-    s.setColumnWidth(1, 220);
-    s.setColumnWidth(2, 800);
-  }
+function getEntriesSheet(ss){
+  let s=ss.getSheetByName('Entries');
+  if(!s){ s=ss.insertSheet('Entries'); s.getRange('A1:I1').setValues([['id','type','amount','category','note','date','who','split','createdAt']]); s.setFrozenRows(1); }
   return s;
 }
-function find(sheet, key) {
-  const v = sheet.getDataRange().getValues();
-  for (let i = 1; i < v.length; i++) if (String(v[i][0]) === key) return String(v[i][1]);
-  return null;
+function getLogSheet(ss){
+  let s=ss.getSheetByName('EditLog');
+  if(!s){ s=ss.insertSheet('EditLog'); s.getRange('A1:J1').setValues([['Timestamp','Action','By','EntryId','Type','Category','Note','EntryDate','AmtBefore','AmtAfter']]); s.setFrozenRows(1); }
+  return s;
 }
-function write(sheet, key, value) {
-  const v = sheet.getDataRange().getValues();
-  for (let i = 1; i < v.length; i++) {
-    if (String(v[i][0]) === key) { sheet.getRange(i+1,2).setValue(value); return; }
-  }
-  sheet.appendRow([key, value]);
-}
-function remove(sheet, key) {
-  const v = sheet.getDataRange().getValues();
-  for (let i = v.length-1; i >= 1; i--) {
-    if (String(v[i][0]) === key) { sheet.deleteRow(i+1); return; }
-  }
-}
-function listAll(sheet, prefix) {
-  return sheet.getDataRange().getValues().slice(1)
-    .filter(r => String(r[0]).startsWith(prefix)).map(r => String(r[0]));
-}
-function out(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
-}`;
+function find(sheet,key){ const v=sheet.getDataRange().getValues(); for(let i=1;i<v.length;i++) if(String(v[i][0])===key) return String(v[i][1]); return null; }
+function write(sheet,key,value){ const v=sheet.getDataRange().getValues(); for(let i=1;i<v.length;i++){ if(String(v[i][0])===key){ sheet.getRange(i+1,2).setValue(value); return; } } sheet.appendRow([key,value]); }
+function remove(sheet,key){ const v=sheet.getDataRange().getValues(); for(let i=v.length-1;i>=1;i--) if(String(v[i][0])===key){ sheet.deleteRow(i+1); return; } }
+function listAll(sheet,prefix){ return sheet.getDataRange().getValues().slice(1).filter(r=>String(r[0]).startsWith(prefix)).map(r=>String(r[0])); }
+function out(obj){ return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON); }`;
 
-function getScriptUrl(){ return 'https://script.google.com/macros/s/AKfycbwbimlQKZlb-CaeCGXDF2JOf5ZzdMYWHGDMqZtnLd34tNZ59anOkVDnnrCaPD2beutFjA/exec'; }
+function getScriptUrl(){ return 'https://script.google.com/macros/s/AKfycbxYLDIEa9wjrrDpJCnjqiYDXELmTonHMhtP_e_tus9xS_Y_5tlnTLO8Utaj1fvCC4oGWA/exec'; }
 function saveScriptUrl(url){ /* URL ฝังไว้แล้ว ไม่ต้องบันทึก */ }
 
 async function gsCall(method, params){
@@ -1369,14 +1366,16 @@ async function gsCall(method, params){
 
 // ---- Cache: ใช้ป้องกันการโหลดซ้ำหลายครั้งตอน login ----
 let _gsCache = null;
+let _gsCacheEntries = null; // entries จาก Entries sheet
 
 async function warmCache(){
   try{
     const d = await gsCall('GET', { action: 'getAll' });
     _gsCache = d.data || {};
-  } catch(e){ _gsCache = {}; }
+    _gsCacheEntries = d.entries || null; // entries แยก sheet
+  } catch(e){ _gsCache = {}; _gsCacheEntries = null; }
 }
-function clearCache(){ _gsCache = null; }
+function clearCache(){ _gsCache = null; _gsCacheEntries = null; }
 
 // ---- Batch write: เซฟหลาย key ใน request เดียว ----
 let _saveStatus = 'idle'; // idle | saving | ok | error
@@ -1394,11 +1393,21 @@ function setSaveStatus(status){
   if(status === 'ok') _saveStatusTimer = setTimeout(() => setSaveStatus('idle'), 3000);
 }
 
-async function reliableGsWrite(key, value, retries = 3){
+async function reliableGsWrite(keyOrAction, value, sharedOrRetries = false){
+  const entryActions = ['appendEntry','updateEntry','deleteEntry','replaceAllEntries'];
+  const isEntryAction = entryActions.includes(keyOrAction);
   setSaveStatus('saving');
+  const retries = 3;
   for(let i = 0; i < retries; i++){
     try{
-      await gsCall('POST', { action: 'set', key, value });
+      if(isEntryAction){
+        await gsCall('POST', { action: keyOrAction, value });
+      } else {
+        const key = keyOrAction;
+        const shared = sharedOrRetries;
+        if(shared && _gsCache) _gsCache[key] = value;
+        await gsCall('POST', { action: 'set', key, value });
+      }
       setSaveStatus('ok');
       _lastFailedWrite = null;
       return true;
@@ -1407,7 +1416,7 @@ async function reliableGsWrite(key, value, retries = 3){
     }
   }
   setSaveStatus('error');
-  _lastFailedWrite = { key, value };
+  _lastFailedWrite = { keyOrAction, value };
   showToast('⚠ บันทึกไม่สำเร็จ — ตรวจสอบอินเทอร์เน็ตแล้วลอง refresh');
   return false;
 }
@@ -1416,7 +1425,7 @@ async function reliableGsWrite(key, value, retries = 3){
 window.addEventListener('online', () => {
   if(_lastFailedWrite){
     showToast('🔄 กำลังบันทึกข้อมูลที่ค้างอยู่...');
-    reliableGsWrite(_lastFailedWrite.key, _lastFailedWrite.value);
+    reliableGsWrite(_lastFailedWrite.keyOrAction, _lastFailedWrite.value);
   }
 });
 
@@ -1537,7 +1546,7 @@ const $ = (id) => document.getElementById(id);
 
 /* ===================== AUTH (เบอร์โทร + PIN, ซิงค์ข้ามอุปกรณ์) ===================== */
 const USERS_KEY = 'kp_users';     // shared: { phone: {pin, who} }
-const ENTRIES_KEY = 'kp_entries'; // shared: JSON array of entries
+const ENTRIES_KEY = 'kp_entries'; // เดิมใช้ key นี้ใน Data sheet (ยังคงไว้เพื่อ migration)
 let currentUser = null; // { phone, who }
 
 function normPhone(p){ return (p || '').replace(/\D/g, ''); }
@@ -1552,15 +1561,52 @@ async function saveUsers(users){
   try{ await window.storage.set(USERS_KEY, JSON.stringify(users), true); }
   catch(e){ console.error('save users failed', e); }
 }
+
 async function loadEntriesFromCloud(){
+  // 1. ใช้ cache ถ้ามี (จาก warmCache ที่โหลด getAll)
+  if(_gsCacheEntries !== null) return _gsCacheEntries;
   try{
-    const res = await window.storage.get(ENTRIES_KEY, true);
-    return res ? JSON.parse(res.value) : [];
+    // 2. โหลดจาก Entries sheet (row-based — ระบบใหม่)
+    const d = await gsCall('GET', { action: 'getEntries' });
+    if(d.entries && d.entries.length > 0) return d.entries;
+    // 3. Migration: ถ้า Entries sheet ว่าง ลองดึงจาก Data sheet (ระบบเก่า)
+    const old = await window.storage.get(ENTRIES_KEY, true).catch(()=>null);
+    if(old && old.value){
+      const oldEntries = JSON.parse(old.value);
+      if(oldEntries.length > 0){
+        // migrate: เขียนลง Entries sheet และลบออกจาก Data sheet
+        gsCall('POST', { action: 'replaceAllEntries', value: JSON.stringify(oldEntries.map(e => ({...e, receipt: undefined}))) });
+        showToast('🔄 ย้ายข้อมูลไปยังระบบใหม่แล้ว');
+        return oldEntries;
+      }
+    }
+    return [];
   } catch(e){ return []; }
 }
+
+// ---- Per-entry operations (แทน saveEntriesToCloud แบบเก่า) ----
+async function appendEntryToSheet(entry){
+  const e = {...entry, receipt: undefined}; // ไม่เก็บรูปใน Entries sheet
+  reliableGsWrite('appendEntry', JSON.stringify(e), true);
+  // รูปสลิปเก็บแยกใน Data sheet
+  if(entry.receipt) reliableGsWrite('kp_receipt_' + entry.id, entry.receipt, false);
+}
+async function updateEntryOnSheet(entry){
+  const e = {...entry, receipt: undefined};
+  reliableGsWrite('updateEntry', JSON.stringify(e), true);
+  if(entry.receipt) reliableGsWrite('kp_receipt_' + entry.id, entry.receipt, false);
+}
+async function deleteEntryFromSheet(id){
+  reliableGsWrite('deleteEntry', String(id), true);
+}
+async function replaceAllEntriesOnSheet(arr){
+  const stripped = arr.map(e => ({...e, receipt: undefined}));
+  reliableGsWrite('replaceAllEntries', JSON.stringify(stripped), true);
+}
+
+// compat: saveEntriesToCloud ยังคงไว้สำหรับ import
 async function saveEntriesToCloud(){
-  try{ await window.storage.set(ENTRIES_KEY, JSON.stringify(entries), true); }
-  catch(e){ console.error('save entries failed', e); }
+  replaceAllEntriesOnSheet(entries);
 }
 
 function showLoginErr(msg){ $('loginErr').textContent = msg || ''; }
@@ -2388,18 +2434,19 @@ function applyDueRecurring(){
   let changed = false;
   recurring.forEach(r => {
     if(r.lastApplied !== monthKey && now.getDate() >= r.day){
-      entries.unshift({
+      const newEntry = {
         id: Date.now() + Math.floor(Math.random()*1000),
         type: r.type, amount: r.amount, category: r.category, note: r.note,
         date: `${now.getFullYear()}-${pad2(now.getMonth()+1)}-${pad2(r.day)}`,
         who: r.who, split: !!r.split
-      });
+      };
+      entries.unshift(newEntry);
+      appendEntryToSheet(newEntry); // row-based append
       r.lastApplied = monthKey;
       changed = true;
     }
   });
   if(changed){
-    saveEntriesToCloud();
     saveRecurringToCloud();
     showToast('เพิ่มรายการประจำของเดือนนี้ให้อัตโนมัติแล้ว');
   }
@@ -2700,12 +2747,14 @@ $('addBtn').addEventListener('click', () => {
       const before = { ...entries[idx] };
       entries[idx] = { ...entries[idx], ...payload };
       appendEditLog('แก้ไข', before, entries[idx]);
+      updateEntryOnSheet(entries[idx]); // row-based update
     }
     cancelEdit();
   } else {
     const newEntry = { id: Date.now(), ...payload };
     entries.unshift(newEntry);
     appendEditLog('เพิ่ม', null, newEntry);
+    appendEntryToSheet(newEntry); // row-based append
   }
   $('amount').value = '';
   $('note').value = '';
@@ -2716,7 +2765,6 @@ $('addBtn').addEventListener('click', () => {
   $('receiptPreviewWrap').style.display = 'none';
   render();
   pulseBalance();
-  saveEntriesToCloud();
   if(payload.type === 'expense') checkBudgetAlert(payload.category);
 });
 
@@ -2855,7 +2903,7 @@ function deleteEntry(id){
   if(e) appendEditLog('ลบ', e, null);
   entries = entries.filter(x => x.id !== id);
   render();
-  saveEntriesToCloud();
+  deleteEntryFromSheet(id); // row-based delete
 }
 
 function render(){
