@@ -772,6 +772,7 @@
       <div class="nav-item" data-page="calendar"><span class="ic">📅</span> ปฏิทิน</div>
       <div class="nav-item" data-page="recurring"><span class="ic">🔁</span> รายการประจำ</div>
       <div class="nav-item" data-page="settings"><span class="ic">⚙️</span> ตั้งค่า</div>
+      <div class="nav-item" data-page="edithistory"><span class="ic">📋</span> ประวัติแก้ไข</div>
     </nav>
 
     <div class="sidebar-foot">
@@ -1192,6 +1193,19 @@
       </div>
     </div>
 
+    <div class="page" id="page-edithistory">
+      <div class="topbar">
+        <div>
+          <h1>ประวัติการแก้ไข</h1>
+          <div class="desc">บันทึกทุกการเพิ่ม แก้ไข และลบรายการ</div>
+        </div>
+        <button class="logout-btn" id="reloadHistoryBtn" style="flex-shrink:0;">🔄 โหลดใหม่</button>
+      </div>
+      <div class="list-card" id="editHistoryList">
+        <div class="empty">เลือกหน้านี้เพื่อโหลดประวัติ</div>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -1236,8 +1250,33 @@ function handle(action, key, value, prefix) {
       pairs.forEach(p => write(sheet, p.key, p.value));
       return out({success:true, count: pairs.length});
     }
+    // ---- Edit log ----
+    if (action === 'appendLog') {
+      const logSheet = getLogSheet(ss);
+      const row = JSON.parse(value);
+      logSheet.appendRow([row.ts, row.action, row.by, row.entryId, row.type, row.category, row.note, row.date, row.amtBefore, row.amtAfter]);
+      return out({success:true});
+    }
+    if (action === 'getLog') {
+      const logSheet = getLogSheet(ss);
+      const vals = logSheet.getDataRange().getValues().slice(1);
+      const rows = vals.map(r => ({ts:String(r[0]),action:String(r[1]),by:String(r[2]),entryId:String(r[3]),type:String(r[4]),category:String(r[5]),note:String(r[6]),date:String(r[7]),amtBefore:r[8],amtAfter:r[9]}));
+      return out({rows});
+    }
     return out({error: 'unknown_action'});
   } finally { lock.releaseLock(); }
+}
+function getLogSheet(ss) {
+  let s = ss.getSheetByName('EditLog');
+  if (!s) {
+    s = ss.insertSheet('EditLog');
+    s.getRange('A1:J1').setValues([['Timestamp','Action','By','EntryId','Type','Category','Note','EntryDate','AmtBefore','AmtAfter']]);
+    s.setFrozenRows(1);
+    s.setColumnWidth(1, 160);
+    s.setColumnWidth(2, 70);
+    s.setColumnWidth(3, 160);
+  }
+  return s;
 }
 function getSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -2498,8 +2537,11 @@ document.querySelectorAll('.nav-item').forEach(item => {
     item.classList.add('active');
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     $('page-' + item.dataset.page).classList.add('active');
+    if(item.dataset.page === 'edithistory') renderEditHistory();
   });
 });
+
+$('reloadHistoryBtn').addEventListener('click', renderEditHistory);
 
 document.querySelectorAll('#typeToggle button').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -2626,10 +2668,16 @@ $('addBtn').addEventListener('click', () => {
   };
   if(editingId !== null){
     const idx = entries.findIndex(e => e.id === editingId);
-    if(idx !== -1) entries[idx] = { ...entries[idx], ...payload };
+    if(idx !== -1){
+      const before = { ...entries[idx] };
+      entries[idx] = { ...entries[idx], ...payload };
+      appendEditLog('แก้ไข', before, entries[idx]);
+    }
     cancelEdit();
   } else {
-    entries.unshift({ id: Date.now(), ...payload });
+    const newEntry = { id: Date.now(), ...payload };
+    entries.unshift(newEntry);
+    appendEditLog('เพิ่ม', null, newEntry);
   }
   $('amount').value = '';
   $('note').value = '';
@@ -2643,6 +2691,59 @@ $('addBtn').addEventListener('click', () => {
   saveEntriesToCloud();
   if(payload.type === 'expense') checkBudgetAlert(payload.category);
 });
+
+/* ===================== EDIT LOG ===================== */
+async function appendEditLog(action, before, after){
+  const entry = after || before;
+  const logRow = {
+    ts: new Date().toISOString(),
+    action,
+    by: currentWho,
+    entryId: entry?.id || '',
+    type: entry?.type || '',
+    category: entry?.category || '',
+    note: entry?.note || '',
+    date: entry?.date || '',
+    amtBefore: action === 'แก้ไข' ? (before?.amount ?? '') : (action === 'ลบ' ? (before?.amount ?? '') : ''),
+    amtAfter:  action === 'แก้ไข' ? (after?.amount  ?? '') : (action === 'เพิ่ม' ? (after?.amount ?? '') : '')
+  };
+  try{
+    await gsCall('POST', { action: 'appendLog', row: JSON.stringify(logRow) });
+  } catch(e){ /* log เสริม ไม่ต้องแจ้งเตือนถ้าล้มเหลว */ }
+}
+
+async function loadEditLog(){
+  try{
+    const d = await gsCall('GET', { action: 'getLog' });
+    return d.rows || [];
+  } catch(e){ return []; }
+}
+
+async function renderEditHistory(){
+  const el = $('editHistoryList');
+  if(!el) return;
+  el.innerHTML = '<div class="empty">⏳ กำลังโหลดประวัติ...</div>';
+  const rows = await loadEditLog();
+  if(!rows.length){
+    el.innerHTML = '<div class="empty">ยังไม่มีประวัติการแก้ไข</div>';
+    return;
+  }
+  const actionColor = { 'เพิ่ม': 'var(--sage)', 'แก้ไข': 'var(--gold)', 'ลบ': 'var(--urgent)' };
+  el.innerHTML = [...rows].reverse().map(r => `
+    <div class="entry">
+      <div class="entry-main">
+        <div class="entry-title">
+          <span style="color:${actionColor[r.action]||'var(--muted)'}; font-weight:700;">${r.action}</span>
+          — ${r.category}${r.note ? ' · ' + r.note : ''}
+          ${r.action === 'แก้ไข' && r.amtBefore !== r.amtAfter ? `<span style="color:var(--muted); font-size:11px;"> (${formatMoney(r.amtBefore)} → ${formatMoney(r.amtAfter)} บาท)</span>` : ''}
+          ${r.action === 'เพิ่ม' ? `<span style="color:var(--muted); font-size:11px;"> ${formatMoney(r.amtAfter)} บาท</span>` : ''}
+          ${r.action === 'ลบ' ? `<span style="color:var(--muted); font-size:11px;"> ${formatMoney(r.amtBefore)} บาท</span>` : ''}
+        </div>
+        <div class="entry-meta">${r.by} · ${formatDate(r.date)} · บันทึกเมื่อ ${new Date(r.ts).toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'})}</div>
+      </div>
+    </div>
+  `).join('');
+}
 
 function checkBudgetAlert(category){
   const limit = budgets[category];
@@ -2723,6 +2824,7 @@ function deleteEntry(id){
     showToast(`ลบได้เฉพาะรายการของ ${currentWho} เท่านั้น`);
     return;
   }
+  if(e) appendEditLog('ลบ', e, null);
   entries = entries.filter(x => x.id !== id);
   render();
   saveEntriesToCloud();
