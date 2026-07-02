@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#FAF3E6">
-<title>กระปุกคู่ — บันทึกรายรับรายจ่าย</title>
+<title>INT & VIP — บันทึกรายรับรายจ่าย</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Trirong:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -640,7 +640,7 @@
 
     <div class="setup-step">
       <div class="setup-step-title"><span class="setup-step-num">1</span> สร้าง Google Sheet ใหม่</div>
-      <div class="setup-note">เปิด <a href="https://sheets.new" target="_blank" style="color:var(--accent);">sheets.new</a> เพื่อสร้าง Google Sheet ใหม่ ตั้งชื่อว่า "กระปุกคู่" แล้วเปิดทิ้งไว้</div>
+      <div class="setup-note">เปิด <a href="https://sheets.new" target="_blank" style="color:var(--accent);">sheets.new</a> เพื่อสร้าง Google Sheet ใหม่ ตั้งชื่อว่า "บัญชีคู่" แล้วเปิดทิ้งไว้</div>
     </div>
 
     <div class="setup-step">
@@ -685,7 +685,7 @@
   <div class="login-card">
     <div class="mark">🐷</div>
     <h2 id="loginTitle">เข้าสู่ระบบ</h2>
-    <div class="sub" id="loginSub">กระปุกคู่ — ใช้เบอร์โทรของคุณเข้าสู่ระบบ</div>
+    <div class="sub" id="loginSub">ใช้เบอร์โทรของคุณเข้าสู่ระบบ</div>
 
     <div class="login-err" id="loginErr"></div>
 
@@ -737,8 +737,6 @@
       <button class="submit-btn" id="registerBtn">สร้างบัญชี</button>
       <div class="login-switch">มีบัญชีแล้ว? <a id="showLogin">เข้าสู่ระบบ</a></div>
     </div>
-
-    <div class="sync-note">ข้อมูลและบัญชีจะซิงค์กันระหว่างอุปกรณ์ของคุณกับแฟนโดยอัตโนมัติ</div>
   </div>
 </div>
 
@@ -760,8 +758,8 @@
     <div class="brand">
       <div class="mark">🐷</div>
       <div>
-        <div class="name">กระปุกคู่</div>
-        <div class="tag">การเงินของเราสองคน</div>
+        <div class="name">INT & VIP</div>
+        <div class="tag">บัญชีรายรับรายจ่าย</div>
       </div>
     </div>
 
@@ -822,7 +820,7 @@
         <div class="passbook-top">
           <div class="passbook-jar">🐷</div>
           <div>
-            <div class="passbook-lbl">คงเหลือในกระปุกของเราสองคน</div>
+            <div class="passbook-lbl">คงเหลือในบัญชีของเราสองคน</div>
             <div class="passbook-val display" id="totalBalanceWrap"><span id="totalBalance">0</span><span class="passbook-unit">บาท</span></div>
           </div>
         </div>
@@ -3078,7 +3076,7 @@ $('exportPdfBtn').addEventListener('click', () => {
   `).join('');
   const printWindow = window.open('', '_blank');
   printWindow.document.write(`
-    <html lang="th"><head><meta charset="UTF-8"><title>รายงานกระปุกคู่</title>
+    <html lang="th"><head><meta charset="UTF-8"><title>รายงานบัญชีคู่</title>
     <style>
       body{ font-family:'Sarabun','Inter',sans-serif; padding:30px; color:#2B2118; }
       h1{ font-size:22px; margin-bottom:2px; }
@@ -3093,7 +3091,7 @@ $('exportPdfBtn').addEventListener('click', () => {
       @media print{ body{ padding:10px; } }
     </style></head>
     <body>
-      <h1>รายงานกระปุกคู่ — บันทึกรายรับรายจ่าย</h1>
+      <h1>รายงานบัญชีคู่ — บันทึกรายรับรายจ่าย</h1>
       <div class="sub">พิมพ์เมื่อ ${new Date().toLocaleDateString('th-TH', {day:'numeric', month:'long', year:'numeric'})} · Sittiporn (INT) &amp; Wanaree (VIPCREAM)</div>
       <div class="summary">
         <div><div class="lbl">รายรับรวม</div><div class="val" style="color:#1FA971">+${formatMoney(income)}</div></div>
