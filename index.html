@@ -187,7 +187,35 @@
   .passbook-chip{
     flex:1; display:flex; align-items:center; gap:10px; padding:12px 14px; border-radius:14px;
     background:var(--overlay-1); border:1px solid var(--line);
+    cursor:pointer; transition:transform .15s, box-shadow .15s;
   }
+  .passbook-chip:hover{ transform:translateY(-2px); box-shadow:0 6px 18px rgba(0,0,0,0.1); }
+  .passbook-chip:active{ transform:scale(.97); }
+
+  /* ---- Clickable dashboard chips/rows ---- */
+  .who-row{ cursor:pointer; border-radius:10px; padding:4px 6px; margin:-4px -6px; transition:background .15s; }
+  .who-row:hover{ background:var(--overlay-2); }
+  .leg-item{ cursor:pointer; border-radius:8px; padding:4px 6px; margin:-4px -6px; transition:background .15s; }
+  .leg-item:hover{ background:var(--overlay-2); }
+  .trend-bar{ cursor:pointer; transition:opacity .15s; }
+  .trend-bar:hover{ opacity:.75; }
+  rect.monthly-bar{ cursor:pointer; transition:opacity .15s; }
+  rect.monthly-bar:hover{ opacity:.7; }
+  .insight-item{ cursor:pointer; border-radius:10px; padding:6px 8px; margin:-6px -8px; transition:background .15s; }
+  .insight-item:hover{ background:var(--overlay-2); }
+  .qb-item{ cursor:pointer; transition:transform .15s, box-shadow .15s; }
+  .qb-item:hover{ transform:translateY(-2px); box-shadow:0 4px 14px rgba(0,0,0,0.08); }
+
+  /* ---- Tooltip ---- */
+  .dash-tooltip{
+    position:fixed; background:var(--paper); color:var(--bg); padding:7px 12px; border-radius:10px;
+    font-size:12px; font-weight:600; pointer-events:none; z-index:99; white-space:nowrap;
+    box-shadow:0 4px 14px rgba(0,0,0,0.18); opacity:0; transition:opacity .15s;
+  }
+  .dash-tooltip.show{ opacity:1; }
+
+  /* ---- Number counter animation ---- */
+  .counting{ display:inline-block; }
   .passbook-chip .chip-ic{
     width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;
     font-weight:700; font-size:15px; flex-shrink:0;
@@ -670,6 +698,7 @@
 </div>
 
 <div id="toastWrap"></div>
+<div class="dash-tooltip" id="dashTooltip"></div>
 
 <div id="loadingOverlay">
   <div class="loading-jar">🐷</div>
@@ -805,7 +834,7 @@
       <div class="topbar">
         <div>
           <h1>Dashboard</h1>
-          <div class="desc">ภาพรวมการเงิน อัปเดตทุกครั้งที่บันทึกรายการ</div>
+          <div class="desc">ภาพรวมการเงินของเราสองคน อัปเดตทุกครั้งที่บันทึกรายการ</div>
         </div>
         <div class="range-toggle" id="dashRange">
           <button class="active" data-range="all">ทั้งหมด</button>
@@ -825,11 +854,11 @@
           </div>
         </div>
         <div class="passbook-split">
-          <div class="passbook-chip income">
+          <div class="passbook-chip income" onclick="navToTransactions('income')" title="ดูรายรับทั้งหมด">
             <span class="chip-ic">↑</span>
             <div><div class="chip-lbl">รายรับรวม</div><div class="chip-val">+<span id="totalIncome">0</span></div></div>
           </div>
-          <div class="passbook-chip expense">
+          <div class="passbook-chip expense" onclick="navToTransactions('expense')" title="ดูรายจ่ายทั้งหมด">
             <span class="chip-ic">↓</span>
             <div><div class="chip-lbl">รายจ่ายรวม</div><div class="chip-val">−<span id="totalExpense">0</span></div></div>
           </div>
@@ -2005,7 +2034,7 @@ function renderQuickBanner(){
   monthExpense.forEach(e => { byCat[e.category] = (byCat[e.category] || 0) + e.amount; });
   const catsWithBudget = Object.keys(budgets).filter(c => budgets[c] > 0);
   let html = `
-    <div class="qb-item">
+    <div class="qb-item" onclick="navToCalendarDay('${todayStr}')" title="ดูรายการวันนี้ในปฏิทิน">
       <span class="qb-ic">🗓️</span>
       <div><div class="qb-lbl">วันนี้ใช้ไปแล้ว</div><div class="qb-val">฿${formatMoney(todaySpent)}</div></div>
     </div>
@@ -2015,16 +2044,16 @@ function renderQuickBanner(){
     const totalSpent = catsWithBudget.reduce((s,c) => s + (byCat[c] || 0), 0);
     const remain = totalLimit - totalSpent;
     html += `
-      <div class="qb-item">
+      <div class="qb-item" onclick="gotoPage('budget')" title="ดูรายละเอียดงบประมาณ">
         <span class="qb-ic">${remain < 0 ? '⚠️' : '🎯'}</span>
         <div><div class="qb-lbl">งบประมาณเดือนนี้</div><div class="qb-val ${remain < 0 ? 'warn' : ''}">${remain < 0 ? 'เกินงบ ฿'+formatMoney(Math.abs(remain)) : 'เหลือ ฿'+formatMoney(remain)}</div></div>
       </div>
     `;
   } else {
     html += `
-      <div class="qb-item">
+      <div class="qb-item" onclick="gotoPage('budget')" title="ไปตั้งงบประมาณ">
         <span class="qb-ic">🎯</span>
-        <div><div class="qb-lbl">งบประมาณ</div><div class="qb-val" style="font-size:12px; color:var(--muted); font-weight:500;">ยังไม่ได้ตั้งงบ — ไปตั้งได้ที่หน้า "งบ/เป้าหมาย"</div></div>
+        <div><div class="qb-lbl">งบประมาณ</div><div class="qb-val" style="font-size:12px; color:var(--muted); font-weight:500;">ยังไม่ได้ตั้งงบ — แตะเพื่อไปตั้ง</div></div>
       </div>
     `;
   }
@@ -2058,12 +2087,13 @@ function renderInsights(){
       const change = ((topVal - lastVal) / lastVal) * 100;
       const dir = change >= 0 ? 'เพิ่มขึ้น' : 'ลดลง';
       const ic = change >= 0 ? '📈' : '📉';
-      items.push(`<div class="insight-item"><span class="ins-ic">${ic}</span><span>เดือนนี้ใช้จ่ายหมวด <b>${topCat}</b> ${dir} <b>${Math.abs(Math.round(change))}%</b> จากเดือนก่อน (฿${formatMoney(topVal)})</span></div>`);
+      items.push(`<div class="insight-item" onclick="navToTransactionsByCategory('${topCat}')" title="ดูรายจ่ายหมวด ${topCat}"><span class="ins-ic">${ic}</span><span>เดือนนี้ใช้จ่ายหมวด <b>${topCat}</b> ${dir} <b>${Math.abs(Math.round(change))}%</b> จากเดือนก่อน (฿${formatMoney(topVal)})</span></div>`);
     } else {
-      items.push(`<div class="insight-item"><span class="ins-ic">🔎</span><span>หมวดที่ใช้จ่ายเยอะสุดเดือนนี้คือ <b>${topCat}</b> (฿${formatMoney(topVal)})</span></div>`);
+      items.push(`<div class="insight-item" onclick="navToTransactionsByCategory('${topCat}')" title="ดูรายจ่ายหมวด ${topCat}"><span class="ins-ic">🔎</span><span>หมวดที่ใช้จ่ายเยอะสุดเดือนนี้คือ <b>${topCat}</b> (฿${formatMoney(topVal)})</span></div>`);
     }
     const top3 = sortedCats.slice(0,3).map(([c,v]) => `${c} (฿${formatMoney(v)})`).join(', ');
-    items.push(`<div class="insight-item"><span class="ins-ic">🏆</span><span>หมวดที่ใช้เงินเยอะสุด 3 อันดับเดือนนี้: ${top3}</span></div>`);
+    const topCat1 = sortedCats[0]?.[0] || '';
+    items.push(`<div class="insight-item" onclick="navToTransactionsByCategory('${topCat1}')" title="ดูรายจ่ายหมวดอันดับ 1"><span class="ins-ic">🏆</span><span>หมวดที่ใช้เงินเยอะสุด 3 อันดับเดือนนี้: ${top3}</span></div>`);
   }
 
   const totalThisMonth = Object.values(thisMonthCat).reduce((s,v) => s+v, 0);
@@ -2862,9 +2892,9 @@ function render(){
 
   const income = entries.filter(e => e.type === 'income').reduce((s,e) => s + e.amount, 0);
   const expense = entries.filter(e => e.type === 'expense').reduce((s,e) => s + e.amount, 0);
-  $('totalIncome').textContent = formatMoney(income);
-  $('totalExpense').textContent = formatMoney(expense);
-  $('totalBalance').textContent = formatMoney(income - expense);
+  countUp($('totalIncome'), income);
+  countUp($('totalExpense'), expense);
+  countUp($('totalBalance'), income - expense);
 
   renderDashboard();
   renderCalendar();
@@ -2880,6 +2910,116 @@ function rangedEntries(){
   });
 }
 
+/* ===================== DASHBOARD INTERACTIVITY ===================== */
+
+// Count-up animation for numbers
+function countUp(el, target){
+  if(!el) return;
+  const start = parseFloat(el.textContent.replace(/,/g,'')) || 0;
+  const diff = target - start;
+  if(Math.abs(diff) < 1){ el.textContent = formatMoney(target); return; }
+  const duration = 500;
+  const startTime = performance.now();
+  function step(now){
+    const p = Math.min((now - startTime) / duration, 1);
+    const ease = 1 - Math.pow(1 - p, 3);
+    el.textContent = formatMoney(start + diff * ease);
+    if(p < 1) requestAnimationFrame(step);
+    else el.textContent = formatMoney(target);
+  }
+  requestAnimationFrame(step);
+}
+
+// Tooltip
+function showDashTip(e, text){
+  const t = $('dashTooltip');
+  t.textContent = text;
+  t.classList.add('show');
+  moveDashTip(e);
+}
+function moveDashTip(e){
+  const t = $('dashTooltip');
+  t.style.left = (e.clientX + 14) + 'px';
+  t.style.top  = (e.clientY - 32) + 'px';
+}
+function hideDashTip(){
+  $('dashTooltip').classList.remove('show');
+}
+
+// Navigation helpers — navigate to page and apply filters
+function gotoPage(page){
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const navEl = document.querySelector(`.nav-item[data-page="${page}"]`);
+  if(navEl) navEl.classList.add('active');
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  $('page-' + page)?.classList.add('active');
+}
+
+function navToTransactions(filterType){
+  // Reset all filters, set type filter
+  searchQuery = ''; filterCategory = ''; filterWho = ''; filterDateFrom = ''; filterDateTo = '';
+  $('searchInput').value = ''; $('filterCategorySel').value = ''; $('filterWhoSel').value = '';
+  $('filterDateFrom').value = ''; $('filterDateTo').value = '';
+  document.querySelectorAll('#filters button').forEach(b => b.classList.remove('active'));
+  const btn = document.querySelector(`#filters button[data-filter="${filterType}"]`);
+  if(btn) btn.classList.add('active');
+  currentFilter = filterType;
+  gotoPage('transactions');
+  render();
+  showToast(`แสดงเฉพาะ${filterType === 'income' ? 'รายรับ' : 'รายจ่าย'}ทั้งหมด`);
+}
+
+function navToTransactionsByWho(who, filterType){
+  searchQuery = ''; filterCategory = ''; filterDateFrom = ''; filterDateTo = '';
+  filterWho = who;
+  $('searchInput').value = ''; $('filterCategorySel').value = '';
+  $('filterDateFrom').value = ''; $('filterDateTo').value = '';
+  $('filterWhoSel').value = who;
+  document.querySelectorAll('#filters button').forEach(b => b.classList.remove('active'));
+  const btn = document.querySelector(`#filters button[data-filter="${filterType}"]`);
+  if(btn) btn.classList.add('active');
+  currentFilter = filterType;
+  gotoPage('transactions');
+  render();
+  showToast(`แสดง${filterType === 'income' ? 'รายรับ' : 'รายจ่าย'}ของ ${who}`);
+}
+
+function navToTransactionsByCategory(cat){
+  searchQuery = ''; filterWho = ''; filterDateFrom = ''; filterDateTo = '';
+  filterCategory = cat;
+  $('searchInput').value = ''; $('filterWhoSel').value = '';
+  $('filterDateFrom').value = ''; $('filterDateTo').value = '';
+  $('filterCategorySel').value = cat;
+  document.querySelectorAll('#filters button').forEach(b => b.classList.remove('active'));
+  document.querySelector('#filters button[data-filter="all"]')?.classList.add('active');
+  currentFilter = 'expense';
+  document.querySelector('#filters button[data-filter="expense"]')?.classList.add('active');
+  document.querySelector('#filters button[data-filter="all"]')?.classList.remove('active');
+  gotoPage('transactions');
+  render();
+  showToast(`แสดงรายจ่ายหมวด "${cat}"`);
+}
+
+function navToCalendarDay(dateStr){
+  const d = new Date(dateStr);
+  calYear = d.getFullYear();
+  calMonth = d.getMonth();
+  calSelectedDate = dateStr;
+  gotoPage('calendar');
+  renderCalendar();
+  showToast(`ดูรายการวันที่ ${formatDate(dateStr)}`);
+}
+
+function navToCalendarMonth(y, m){
+  calYear = y;
+  calMonth = m;
+  calSelectedDate = null;
+  gotoPage('calendar');
+  renderCalendar();
+  const label = new Date(y, m, 1).toLocaleDateString('th-TH', {month:'long', year:'numeric'});
+  showToast(`ดูปฏิทิน ${label}`);
+}
+
 function renderDashboard(){
   renderQuickBanner();
   renderInsights();
@@ -2893,11 +3033,11 @@ function renderDashboard(){
 
   $('whoBars').innerHTML = people.map((p, i) => `
     <div>
-      <div class="who-row income">
+      <div class="who-row income" onclick="navToTransactionsByWho('${p}','income')" title="ดูรายรับของ ${p}">
         <div class="who-row-head"><span><span class="avatar ${i===0?'who-a':'who-b'}" style="width:18px;height:18px;font-size:9px;vertical-align:-4px;margin-right:6px;">${i===0?'S':'W'}</span>${p} · รายรับ</span><span class="amt">${formatMoney(sums[p].income)}</span></div>
         <div class="track"><div class="fill" style="width:${(sums[p].income/maxVal*100)}%"></div></div>
       </div>
-      <div class="who-row expense" style="margin-top:8px;">
+      <div class="who-row expense" style="margin-top:8px;" onclick="navToTransactionsByWho('${p}','expense')" title="ดูรายจ่ายของ ${p}">
         <div class="who-row-head"><span><span class="avatar ${i===0?'who-a':'who-b'}" style="width:18px;height:18px;font-size:9px;vertical-align:-4px;margin-right:6px;">${i===0?'S':'W'}</span>${p} · รายจ่าย</span><span class="amt">${formatMoney(sums[p].expense)}</span></div>
         <div class="track"><div class="fill" style="width:${(sums[p].expense/maxVal*100)}%"></div></div>
       </div>
@@ -2930,7 +3070,7 @@ function renderDashboard(){
     });
     donutSvg.innerHTML = arcs;
     legend.innerHTML = catEntries.slice(0,6).map(([cat,val], i) => `
-      <div class="leg-item">
+      <div class="leg-item" onclick="navToTransactionsByCategory('${cat}')" title="ดูรายจ่ายหมวด ${cat}">
         <span class="sw" style="background:${PALETTE[i % PALETTE.length]}"></span>
         <span class="leg-name">${cat}</span>
         <span class="leg-pct">${Math.round(val/totalExp*100)}%</span>
@@ -2960,8 +3100,12 @@ function renderDashboard(){
     const x = i * (barW + gap) + 20;
     const y = 110 - h;
     const label = new Date(days[i]).toLocaleDateString('th-TH', {day:'numeric', month:'short'});
+    const tip = v > 0 ? `${label}: ฿${formatMoney(v)}` : label;
     bars += `
-      <rect class="trend-bar" x="${x}" y="${y}" width="${barW}" height="${Math.max(h,2)}" rx="6"></rect>
+      <rect class="trend-bar" x="${x}" y="${y}" width="${barW}" height="${Math.max(h,2)}" rx="6"
+        onclick="navToCalendarDay('${days[i]}')"
+        onmouseenter="showDashTip(event,'${tip}')"
+        onmouseleave="hideDashTip()"></rect>
       <text x="${x + barW/2}" y="128" text-anchor="middle" font-size="11" fill="${mutedColor}">${label}</text>
       ${v > 0 ? `<text x="${x + barW/2}" y="${y - 6}" text-anchor="middle" font-size="11" fill="${paperColor}" font-weight="600">${Math.round(v)}</text>` : ''}
     `;
@@ -3003,9 +3147,15 @@ function renderMonthlyComparison(mutedColor, paperColor){
     const hEx = (s.expense / maxVal) * 95;
     const xIn = cx - barW - gapBar/2;
     const xEx = cx + gapBar/2;
+    const tipIn = `${months[i].label} รายรับ: ฿${formatMoney(s.income)}`;
+    const tipEx = `${months[i].label} รายจ่าย: ฿${formatMoney(s.expense)}`;
     bars += `
-      <rect x="${xIn}" y="${120 - hIn}" width="${barW}" height="${Math.max(hIn,1)}" rx="5" fill="${sageColor}"></rect>
-      <rect x="${xEx}" y="${120 - hEx}" width="${barW}" height="${Math.max(hEx,1)}" rx="5" fill="${terracottaColor}"></rect>
+      <rect class="monthly-bar" x="${xIn}" y="${120 - hIn}" width="${barW}" height="${Math.max(hIn,1)}" rx="5" fill="${sageColor}"
+        onclick="navToCalendarMonth(${months[i].y},${months[i].m})"
+        onmouseenter="showDashTip(event,'${tipIn}')" onmouseleave="hideDashTip()"></rect>
+      <rect class="monthly-bar" x="${xEx}" y="${120 - hEx}" width="${barW}" height="${Math.max(hEx,1)}" rx="5" fill="${terracottaColor}"
+        onclick="navToCalendarMonth(${months[i].y},${months[i].m})"
+        onmouseenter="showDashTip(event,'${tipEx}')" onmouseleave="hideDashTip()"></rect>
       <text x="${cx}" y="138" text-anchor="middle" font-size="11" fill="${mutedColor}">${months[i].label}</text>
     `;
   });
