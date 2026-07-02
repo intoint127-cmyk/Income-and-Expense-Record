@@ -785,7 +785,10 @@
         </div>
         <button class="logout-btn" id="logoutBtn">ออกจากระบบ</button>
       </div>
-      <button class="logout-btn" id="refreshBtn" style="width:100%;">🔄 รีเฟรชข้อมูล</button>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+        <button class="logout-btn" id="refreshBtn" style="flex:1;">🔄 รีเฟรชข้อมูล</button>
+        <span id="saveStatusBadge" title="สถานะบันทึก" style="font-size:16px; cursor:default;"></span>
+      </div>
       <button class="theme-toggle" id="themeToggle">
         <span class="track"><span class="thumb"></span></span>
         <span class="theme-label" id="themeLabel">โหมดสว่าง</span>
@@ -1310,27 +1313,46 @@ async function warmCache(){
 function clearCache(){ _gsCache = null; }
 
 // ---- Batch write: เซฟหลาย key ใน request เดียว ----
-let _pendingWrites = [];
-let _writeTimer = null;
-function scheduleBatchWrite(key, value){
-  _pendingWrites = _pendingWrites.filter(p => p.key !== key);
-  _pendingWrites.push({ key, value });
-  clearTimeout(_writeTimer);
-  _writeTimer = setTimeout(flushWrites, 300);
+let _saveStatus = 'idle'; // idle | saving | ok | error
+let _saveStatusTimer = null;
+let _lastFailedWrite = null; // {key, value} to retry
+
+function setSaveStatus(status){
+  _saveStatus = status;
+  const el = document.getElementById('saveStatusBadge');
+  if(!el) return;
+  if(status === 'saving'){ el.textContent = '⏳'; el.title = 'กำลังบันทึก...'; el.style.color = 'var(--muted)'; }
+  else if(status === 'ok'){  el.textContent = '✓';  el.title = 'บันทึกแล้ว';     el.style.color = 'var(--sage)'; }
+  else if(status === 'error'){ el.textContent = '⚠'; el.title = 'บันทึกไม่สำเร็จ — กำลังลองใหม่...'; el.style.color = 'var(--urgent)'; }
+  clearTimeout(_saveStatusTimer);
+  if(status === 'ok') _saveStatusTimer = setTimeout(() => setSaveStatus('idle'), 3000);
 }
-async function flushWrites(){
-  if(!_pendingWrites.length) return;
-  const batch = [..._pendingWrites];
-  _pendingWrites = [];
-  try{
-    await gsCall('POST', { action: 'setMany', value: JSON.stringify(batch) });
-  } catch(e){
-    // fallback: write individually
-    for(const p of batch){
-      try{ await gsCall('POST', { action: 'set', key: p.key, value: p.value }); } catch(e2){}
+
+async function reliableGsWrite(key, value, retries = 3){
+  setSaveStatus('saving');
+  for(let i = 0; i < retries; i++){
+    try{
+      await gsCall('POST', { action: 'set', key, value });
+      setSaveStatus('ok');
+      _lastFailedWrite = null;
+      return true;
+    } catch(e){
+      if(i < retries - 1) await new Promise(r => setTimeout(r, 1500 * (i+1)));
     }
   }
+  setSaveStatus('error');
+  _lastFailedWrite = { key, value };
+  showToast('⚠ บันทึกไม่สำเร็จ — ตรวจสอบอินเทอร์เน็ตแล้วลอง refresh');
+  return false;
 }
+
+// Retry failed write when user comes back online
+window.addEventListener('online', () => {
+  if(_lastFailedWrite){
+    showToast('🔄 กำลังบันทึกข้อมูลที่ค้างอยู่...');
+    reliableGsWrite(_lastFailedWrite.key, _lastFailedWrite.value);
+  }
+});
 
 // Replace window.storage with Google Sheets (shared) + localStorage (personal)
 window.storage = {
@@ -1356,9 +1378,9 @@ window.storage = {
       localStorage.setItem('kp_p_' + key, value);
       return { key, value, shared: false };
     }
-    // อัปเดต cache ทันที แล้วส่ง write แบบ batch
+    // อัปเดต cache ทันที (optimistic) แล้วเขียนไป Google Sheets เลย
     if(_gsCache) _gsCache[key] = value;
-    scheduleBatchWrite(key, value);
+    reliableGsWrite(key, value); // ไม่ await — ไม่บล็อก UI แต่มี retry ถ้าล้มเหลว
     return { key, value, shared: true };
   },
   async delete(key, shared = false){
