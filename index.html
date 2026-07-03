@@ -1600,20 +1600,25 @@ async function loadEntriesFromCloud(){
 // เช่น "2026-07-01T00:00:00.000Z" → ตัดให้เหลือแค่ "2026-07-01"
 // แปลง date ทุกรูปแบบที่ Apps Script ส่งมา → "YYYY-MM-DD"
 function toDateKey(dateVal){
-  if(!dateVal) return '';
-  const s = String(dateVal);
-  // "2026-07-01" หรือ "2026-07-01T..." → ตัด YYYY-MM-DD ออกมา
+  if(!dateVal && dateVal !== 0) return '';
+  const s = String(dateVal).trim();
+  if(!s || s === 'undefined' || s === 'null') return '';
+  // Already "YYYY-MM-DD" or "YYYY-MM-DDT..." → extract YYYY-MM-DD
   const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if(isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
-  // "Thu Jul 01 2026..." หรือ format อื่นๆ → parse แล้ว reformat
-  const d = new Date(s);
-  if(!isNaN(d)){
-    const y = d.getUTCFullYear();
-    const m = String(d.getUTCMonth()+1).padStart(2,'0');
-    const day = String(d.getUTCDate()).padStart(2,'0');
-    return `${y}-${m}-${day}`;
-  }
-  return s;
+  // "Thu Jul 01 2026..." format from Apps Script String(Date)
+  // OR any other parseable date string
+  try{
+    const d = new Date(s);
+    if(!isNaN(d.getTime())){
+      // Use UTC to avoid timezone shift
+      const y = d.getUTCFullYear();
+      const m = String(d.getUTCMonth()+1).padStart(2,'0');
+      const day = String(d.getUTCDate()).padStart(2,'0');
+      return `${y}-${m}-${day}`;
+    }
+  } catch(e){}
+  return '';
 }
 
 function normEntryDate(e){
@@ -2650,6 +2655,7 @@ document.querySelectorAll('.nav-item').forEach(item => {
     item.classList.add('active');
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     $('page-' + item.dataset.page).classList.add('active');
+    if(item.dataset.page === 'calendar') renderCalendar();
     if(item.dataset.page === 'edithistory') renderEditHistory();
   });
 });
@@ -2945,6 +2951,9 @@ function deleteEntry(id){
 }
 
 function render(){
+  // Normalize dates on every render (ป้องกัน format แปลกๆ จาก Google Sheets)
+  entries.forEach(e => { if(e.date) e.date = toDateKey(e.date) || e.date; });
+
   let filtered = currentFilter === 'all' ? entries : entries.filter(e => e.type === currentFilter);
   if(searchQuery){
     filtered = filtered.filter(e =>
