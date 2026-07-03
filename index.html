@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#FAF3E6">
-<title>กระปุกคู่ — บันทึกรายรับรายจ่าย</title>
+<title>INT & VIP — บันทึกรายรับรายจ่าย</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Trirong:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -668,7 +668,7 @@
 
     <div class="setup-step">
       <div class="setup-step-title"><span class="setup-step-num">1</span> สร้าง Google Sheet ใหม่</div>
-      <div class="setup-note">เปิด <a href="https://sheets.new" target="_blank" style="color:var(--accent);">sheets.new</a> เพื่อสร้าง Google Sheet ใหม่ ตั้งชื่อว่า "กระปุกคู่" แล้วเปิดทิ้งไว้</div>
+      <div class="setup-note">เปิด <a href="https://sheets.new" target="_blank" style="color:var(--accent);">sheets.new</a> เพื่อสร้าง Google Sheet ใหม่ ตั้งชื่อว่า "บัญชีคู่" แล้วเปิดทิ้งไว้</div>
     </div>
 
     <div class="setup-step">
@@ -714,7 +714,7 @@
   <div class="login-card">
     <div class="mark">🐷</div>
     <h2 id="loginTitle">เข้าสู่ระบบ</h2>
-    <div class="sub" id="loginSub">กระปุกคู่ — ใช้เบอร์โทรของคุณเข้าสู่ระบบ</div>
+    <div class="sub" id="loginSub">ใช้เบอร์โทรของคุณเข้าสู่ระบบ</div>
 
     <div class="login-err" id="loginErr"></div>
 
@@ -789,13 +789,13 @@
     <div class="brand">
       <div class="mark">🐷</div>
       <div>
-        <div class="name">กระปุกคู่</div>
+        <div class="name">บัญชีคู่</div>
         <div class="tag">การเงินของเราสองคน</div>
       </div>
     </div>
 
     <nav class="nav">
-      <div class="nav-item active" data-page="dashboard"><span class="ic">📊</span> แดชบอร์ด</div>
+      <div class="nav-item active" data-page="dashboard"><span class="ic">📊</span> Dashboard</div>
       <div class="nav-item" data-page="transactions"><span class="ic">🧾</span> รายการ</div>
       <div class="nav-item" data-page="budget"><span class="ic">🎯</span> งบ/เป้าหมาย</div>
       <div class="nav-item" data-page="calendar"><span class="ic">📅</span> ปฏิทิน</div>
@@ -835,7 +835,7 @@
     <div class="page active" id="page-dashboard">
       <div class="topbar">
         <div>
-          <h1>แดชบอร์ด</h1>
+          <h1>Dashboard</h1>
           <div class="desc">ภาพรวมการเงินของเราสองคน อัปเดตทุกครั้งที่บันทึกรายการ</div>
         </div>
         <div class="range-toggle" id="dashRange">
@@ -851,7 +851,7 @@
         <div class="passbook-top">
           <div class="passbook-jar">🐷</div>
           <div>
-            <div class="passbook-lbl">คงเหลือในกระปุกของเราสองคน</div>
+            <div class="passbook-lbl">คงเหลือในบัญชีกของเราสองคน</div>
             <div class="passbook-val display" id="totalBalanceWrap"><span id="totalBalance">0</span><span class="passbook-unit">บาท</span></div>
           </div>
         </div>
@@ -1011,7 +1011,6 @@
         <button id="importBtn">⬆ โหลดไฟล์ข้อมูลเดิม</button>
         <input type="file" id="importFile" accept="application/json">
       </div>
-      <div class="note">ข้อมูลซิงค์อัตโนมัติกับบัญชีของคุณและแฟน — ปุ่มด้านล่างไว้สำรองข้อมูลเป็นไฟล์เพิ่มเติมถ้าต้องการ</div>
     </div>
 
     <div class="page" id="page-budget">
@@ -3295,7 +3294,7 @@ $('exportPdfBtn').addEventListener('click', () => {
   `).join('');
   const printWindow = window.open('', '_blank');
   printWindow.document.write(`
-    <html lang="th"><head><meta charset="UTF-8"><title>รายงานกระปุกคู่</title>
+    <html lang="th"><head><meta charset="UTF-8"><title>รายงานบัญชีคู่</title>
     <style>
       body{ font-family:'Sarabun','Inter',sans-serif; padding:30px; color:#2B2118; }
       h1{ font-size:22px; margin-bottom:2px; }
@@ -3310,7 +3309,7 @@ $('exportPdfBtn').addEventListener('click', () => {
       @media print{ body{ padding:10px; } }
     </style></head>
     <body>
-      <h1>รายงานกระปุกคู่ — บันทึกรายรับรายจ่าย</h1>
+      <h1>รายงานบัญชีคู่ — บันทึกรายรับรายจ่าย</h1>
       <div class="sub">พิมพ์เมื่อ ${new Date().toLocaleDateString('th-TH', {day:'numeric', month:'long', year:'numeric'})} · Sittiporn (INT) &amp; Wanaree (VIPCREAM)</div>
       <div class="summary">
         <div><div class="lbl">รายรับรวม</div><div class="val" style="color:#1FA971">+${formatMoney(income)}</div></div>
