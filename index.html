@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#FAF3E6">
-<title>INT & VIP — บันทึกรายรับรายจ่าย</title>
+<title>กระปุกคู่ — บันทึกรายรับรายจ่าย</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Trirong:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -668,7 +668,7 @@
 
     <div class="setup-step">
       <div class="setup-step-title"><span class="setup-step-num">1</span> สร้าง Google Sheet ใหม่</div>
-      <div class="setup-note">เปิด <a href="https://sheets.new" target="_blank" style="color:var(--accent);">sheets.new</a> เพื่อสร้าง Google Sheet ใหม่ ตั้งชื่อว่า "บัญชีคู่" แล้วเปิดทิ้งไว้</div>
+      <div class="setup-note">เปิด <a href="https://sheets.new" target="_blank" style="color:var(--accent);">sheets.new</a> เพื่อสร้าง Google Sheet ใหม่ ตั้งชื่อว่า "กระปุกคู่" แล้วเปิดทิ้งไว้</div>
     </div>
 
     <div class="setup-step">
@@ -714,7 +714,7 @@
   <div class="login-card">
     <div class="mark">🐷</div>
     <h2 id="loginTitle">เข้าสู่ระบบ</h2>
-    <div class="sub" id="loginSub">ใช้เบอร์โทรของคุณเข้าสู่ระบบ</div>
+    <div class="sub" id="loginSub">กระปุกคู่ — ใช้เบอร์โทรของคุณเข้าสู่ระบบ</div>
 
     <div class="login-err" id="loginErr"></div>
 
@@ -766,6 +766,8 @@
       <button class="submit-btn" id="registerBtn">สร้างบัญชี</button>
       <div class="login-switch">มีบัญชีแล้ว? <a id="showLogin">เข้าสู่ระบบ</a></div>
     </div>
+
+    <div class="sync-note">ข้อมูลและบัญชีจะซิงค์กันระหว่างอุปกรณ์ของคุณกับแฟนโดยอัตโนมัติ</div>
   </div>
 </div>
 
@@ -787,13 +789,13 @@
     <div class="brand">
       <div class="mark">🐷</div>
       <div>
-        <div class="name">INT & VIP</div>
-        <div class="tag">บัญชีรายรับรายจ่าย</div>
+        <div class="name">กระปุกคู่</div>
+        <div class="tag">การเงินของเราสองคน</div>
       </div>
     </div>
 
     <nav class="nav">
-      <div class="nav-item active" data-page="dashboard"><span class="ic">📊</span> Dashboard</div>
+      <div class="nav-item active" data-page="dashboard"><span class="ic">📊</span> แดชบอร์ด</div>
       <div class="nav-item" data-page="transactions"><span class="ic">🧾</span> รายการ</div>
       <div class="nav-item" data-page="budget"><span class="ic">🎯</span> งบ/เป้าหมาย</div>
       <div class="nav-item" data-page="calendar"><span class="ic">📅</span> ปฏิทิน</div>
@@ -833,8 +835,8 @@
     <div class="page active" id="page-dashboard">
       <div class="topbar">
         <div>
-          <h1>Dashboard</h1>
-          <div class="desc">ภาพรวมการเงิน อัปเดตทุกครั้งที่บันทึกรายการ</div>
+          <h1>แดชบอร์ด</h1>
+          <div class="desc">ภาพรวมการเงินของเราสองคน อัปเดตทุกครั้งที่บันทึกรายการ</div>
         </div>
         <div class="range-toggle" id="dashRange">
           <button class="active" data-range="all">ทั้งหมด</button>
@@ -1318,7 +1320,17 @@ function handle(action, key, value, prefix) {
   } finally { lock.releaseLock(); }
 }
 function entryToRow(e){ return [String(e.id),e.type||'',Number(e.amount)||0,e.category||'',e.note||'',e.date||'',e.who||'',e.split?'1':'',new Date().toISOString()]; }
-function rowToEntry(r){ return {id:Number(r[0])||r[0],type:String(r[1]),amount:Number(r[2]),category:String(r[3]),note:String(r[4]),date:String(r[5]),who:String(r[6]),split:r[7]==='1'||r[7]===true}; }
+function rowToEntry(r){
+  // Google Sheets auto-converts date strings to Date objects — แปลงกลับเป็น YYYY-MM-DD
+  let dateStr = r[5];
+  if(Object.prototype.toString.call(dateStr) === '[object Date]'){
+    dateStr = Utilities.formatDate(dateStr, 'UTC', 'yyyy-MM-dd');
+  } else {
+    dateStr = String(dateStr);
+    if(dateStr.length > 10) dateStr = dateStr.slice(0, 10); // trim ISO time component
+  }
+  return {id:Number(r[0])||r[0],type:String(r[1]),amount:Number(r[2]),category:String(r[3]),note:String(r[4]),date:dateStr,who:String(r[6]),split:r[7]==='1'||r[7]===true};
+}
 function getEntriesArr(es){ return es.getDataRange().getValues().slice(1).filter(r=>r[0]).map(rowToEntry).sort((a,b)=>Number(b.id)-Number(a.id)); }
 function getDataSheet(ss){
   let s=ss.getSheetByName('Data');
@@ -1564,11 +1576,11 @@ async function saveUsers(users){
 
 async function loadEntriesFromCloud(){
   // 1. ใช้ cache ถ้ามี (จาก warmCache ที่โหลด getAll)
-  if(_gsCacheEntries !== null) return _gsCacheEntries;
+  if(_gsCacheEntries !== null) return _gsCacheEntries.map(normEntryDate);
   try{
     // 2. โหลดจาก Entries sheet (row-based — ระบบใหม่)
     const d = await gsCall('GET', { action: 'getEntries' });
-    if(d.entries && d.entries.length > 0) return d.entries;
+    if(d.entries && d.entries.length > 0) return d.entries.map(normEntryDate);
     // 3. Migration: ถ้า Entries sheet ว่าง ลองดึงจาก Data sheet (ระบบเก่า)
     const old = await window.storage.get(ENTRIES_KEY, true).catch(()=>null);
     if(old && old.value){
@@ -1577,11 +1589,20 @@ async function loadEntriesFromCloud(){
         // migrate: เขียนลง Entries sheet และลบออกจาก Data sheet
         gsCall('POST', { action: 'replaceAllEntries', value: JSON.stringify(oldEntries.map(e => ({...e, receipt: undefined}))) });
         showToast('🔄 ย้ายข้อมูลไปยังระบบใหม่แล้ว');
-        return oldEntries;
+        return oldEntries.map(normEntryDate);
       }
     }
     return [];
   } catch(e){ return []; }
+}
+
+// Google Sheets อาจ auto-detect "2026-07-01" เป็น Date แล้วส่งกลับมาเป็น ISO string เต็มๆ
+// เช่น "2026-07-01T00:00:00.000Z" → ตัดให้เหลือแค่ "2026-07-01"
+function normEntryDate(e){
+  if(e.date && e.date.length > 10){
+    e.date = e.date.slice(0, 10);
+  }
+  return e;
 }
 
 // ---- Per-entry operations (แทน saveEntriesToCloud แบบเก่า) ----
@@ -3274,7 +3295,7 @@ $('exportPdfBtn').addEventListener('click', () => {
   `).join('');
   const printWindow = window.open('', '_blank');
   printWindow.document.write(`
-    <html lang="th"><head><meta charset="UTF-8"><title>รายงานบัญชีคู่</title>
+    <html lang="th"><head><meta charset="UTF-8"><title>รายงานกระปุกคู่</title>
     <style>
       body{ font-family:'Sarabun','Inter',sans-serif; padding:30px; color:#2B2118; }
       h1{ font-size:22px; margin-bottom:2px; }
@@ -3289,7 +3310,7 @@ $('exportPdfBtn').addEventListener('click', () => {
       @media print{ body{ padding:10px; } }
     </style></head>
     <body>
-      <h1>รายงานบัญชีคู่ — บันทึกรายรับรายจ่าย</h1>
+      <h1>รายงานกระปุกคู่ — บันทึกรายรับรายจ่าย</h1>
       <div class="sub">พิมพ์เมื่อ ${new Date().toLocaleDateString('th-TH', {day:'numeric', month:'long', year:'numeric'})} · Sittiporn (INT) &amp; Wanaree (VIPCREAM)</div>
       <div class="summary">
         <div><div class="lbl">รายรับรวม</div><div class="val" style="color:#1FA971">+${formatMoney(income)}</div></div>
