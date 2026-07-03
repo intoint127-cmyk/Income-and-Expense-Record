@@ -2836,7 +2836,7 @@ async function appendEditLog(action, before, after){
     amtAfter:  action === 'แก้ไข' ? (after?.amount  ?? '') : (action === 'เพิ่ม' ? (after?.amount ?? '') : '')
   };
   try{
-    await gsCall('POST', { action: 'appendLog', row: JSON.stringify(logRow) });
+    await gsCall('POST', { action: 'appendLog', value: JSON.stringify(logRow) });
   } catch(e){ /* log เสริม ไม่ต้องแจ้งเตือนถ้าล้มเหลว */ }
 }
 
