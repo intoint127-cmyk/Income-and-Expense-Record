@@ -1556,6 +1556,12 @@ let CATEGORIES = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
 const PALETTE = ['#D2693F','#2F6F66','#D6A23B','#B15881','#5B8A6B','#8C5B7C','#A8835F','#C0392B','#7C6A4F'];
 const $ = (id) => document.getElementById(id);
 
+// สร้างวันที่วันนี้ในรูป "YYYY-MM-DD" ตาม timezone ของผู้ใช้ (ไม่ใช้ UTC)
+function localDateStr(d){
+  const t = d || new Date();
+  return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+}
+
 /* ===================== AUTH (เบอร์โทร + PIN, ซิงค์ข้ามอุปกรณ์) ===================== */
 const USERS_KEY = 'kp_users';     // shared: { phone: {pin, who} }
 const ENTRIES_KEY = 'kp_entries'; // เดิมใช้ key นี้ใน Data sheet (ยังคงไว้เพื่อ migration)
@@ -2109,7 +2115,7 @@ function renderGoals(){
 
 /* ===================== QUICK SUMMARY BANNER ===================== */
 function renderQuickBanner(){
-  const todayStr = new Date().toISOString().slice(0,10);
+  const todayStr = localDateStr();
   const todaySpent = entries.filter(e => e.type === 'expense' && e.date === todayStr).reduce((s,e) => s+e.amount, 0);
 
   const now = new Date();
@@ -2363,7 +2369,7 @@ async function loadAndRenderNotes(){
   } catch(e){}
 }
 $('notesSaveBtn').addEventListener('click', async () => {
-  const note = { text: $('sharedNote').value, author: currentWho, updatedAt: new Date().toISOString().slice(0,10) };
+  const note = { text: $('sharedNote').value, author: currentWho, updatedAt: localDateStr() };
   try{ await window.storage.set(NOTES_KEY, JSON.stringify(note), true); }
   catch(e){ showToast('บันทึกโน้ตไม่สำเร็จ'); return; }
   $('noteMetaLabel').textContent = `แก้ไขล่าสุดโดย ${currentWho} เมื่อ ${formatDate(note.updatedAt)}`;
@@ -2574,7 +2580,7 @@ function renderSettleSummary(){
 }
 
 $('settleClearBtn').addEventListener('click', () => {
-  settleSince = new Date().toISOString().slice(0,10);
+  settleSince = localDateStr();
   saveSettleSinceToCloud();
   renderSettleSummary();
   showToast('เคลียร์ยอดแล้ว เริ่มนับรอบใหม่ตั้งแต่วันนี้');
@@ -2625,7 +2631,7 @@ let filterDateTo = '';
 
 const categorySelect = $('category');
 const dateInput = $('date');
-dateInput.valueAsDate = new Date();
+dateInput.value = localDateStr();
 
 function fillCategories(){
   categorySelect.innerHTML = CATEGORIES[currentType]
@@ -2782,7 +2788,7 @@ $('addBtn').addEventListener('click', () => {
     amount: amount,
     category: $('category').value,
     note: $('note').value.trim(),
-    date: $('date').value || new Date().toISOString().slice(0,10),
+    date: $('date').value || localDateStr(),
     who: currentWho,
     split: currentType === 'expense' && $('splitCheck').checked,
     receipt: pendingReceipt
@@ -3179,7 +3185,7 @@ function renderDashboard(){
   for(let i = 6; i >= 0; i--){
     const d = new Date();
     d.setDate(d.getDate() - i);
-    days.push(d.toISOString().slice(0,10));
+    days.push(localDateStr(d));
   }
   const dayTotals = days.map(day =>
     entries.filter(e => e.type === 'expense' && e.date === day).reduce((s,e) => s+e.amount, 0)
