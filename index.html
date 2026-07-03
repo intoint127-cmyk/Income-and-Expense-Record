@@ -2823,21 +2823,26 @@ $('addBtn').addEventListener('click', () => {
 /* ===================== EDIT LOG ===================== */
 async function appendEditLog(action, before, after){
   const entry = after || before;
+  if(!entry) return;
   const logRow = {
     ts: new Date().toISOString(),
     action,
-    by: currentWho,
-    entryId: entry?.id || '',
-    type: entry?.type || '',
-    category: entry?.category || '',
-    note: entry?.note || '',
-    date: entry?.date || '',
-    amtBefore: action === 'แก้ไข' ? (before?.amount ?? '') : (action === 'ลบ' ? (before?.amount ?? '') : ''),
-    amtAfter:  action === 'แก้ไข' ? (after?.amount  ?? '') : (action === 'เพิ่ม' ? (after?.amount ?? '') : '')
+    by: currentWho || '',
+    entryId: String(entry.id || ''),
+    type: String(entry.type || ''),
+    category: String(entry.category || ''),
+    note: String(entry.note || ''),
+    date: String(entry.date || ''),
+    amtBefore: action === 'แก้ไข' ? String(before?.amount ?? '') : (action === 'ลบ' ? String(before?.amount ?? '') : ''),
+    amtAfter:  action === 'แก้ไข' ? String(after?.amount  ?? '') : (action === 'เพิ่ม' ? String(after?.amount ?? '') : '')
   };
   try{
-    await gsCall('POST', { action: 'appendLog', value: JSON.stringify(logRow) });
-  } catch(e){ /* log เสริม ไม่ต้องแจ้งเตือนถ้าล้มเหลว */ }
+    const d = await gsCall('POST', { action: 'appendLog', value: JSON.stringify(logRow) });
+    if(d && d.error) console.warn('EditLog error:', d.error);
+  } catch(e){
+    console.error('EditLog failed:', e);
+    showToast('⚠ บันทึก EditLog ไม่สำเร็จ: ' + (e.message || e));
+  }
 }
 
 async function loadEditLog(){
@@ -2946,16 +2951,16 @@ function pulseBalance(){
   setTimeout(() => el.style.transform = '', 220);
 }
 
-function deleteEntry(id){
+async function deleteEntry(id){
   const e = entries.find(x => x.id === id);
   if(e && e.who !== currentWho){
     showToast(`ลบได้เฉพาะรายการของ ${currentWho} เท่านั้น`);
     return;
   }
-  if(e) appendEditLog('ลบ', e, null);
+  if(e) await appendEditLog('ลบ', e, null);
   entries = entries.filter(x => x.id !== id);
   render();
-  deleteEntryFromSheet(id); // row-based delete
+  deleteEntryFromSheet(id);
 }
 
 function render(){
